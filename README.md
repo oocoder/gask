@@ -106,14 +106,14 @@ Errors print `{ "ok": false, "code": N, "error": "..." }`.
   (it uses about 1 GB of RAM while running), and a cold start adds only a second or two.
   Follow-ups need Chrome still up, so ask them within the idle window or raise
   `GASK_IDLE_MINUTES`.
-- AI agents: see the lifecycle and recovery rules in [OUTLINE.md](OUTLINE.md#1-for-agents-lifecycle-and-recovery).
+- AI agents: see the lifecycle and recovery rules in [docs/AGENTS.md](docs/AGENTS.md).
 - Headless Chrome identifies itself as `HeadlessChrome`, and Google refuses AI
   Mode for that. gask presents a normal Chrome user agent instead.
 - It knows an answer is finished when the page announces "AI Mode response is ready".
 - Source links are Google redirects. gask follows each one to report the destination URL.
 - It runs one question at a time, with a minimum gap between questions.
 
-Maintainer notes (DOM markers, gotchas) are in [OUTLINE.md](OUTLINE.md).
+Maintainer notes (DOM markers, gotchas) are in [docs/INTERNALS.md](docs/INTERNALS.md); the system map is [OUTLINE.md](OUTLINE.md).
 
 ## Caveats
 

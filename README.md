@@ -114,8 +114,16 @@ Maintainer notes (DOM markers, gotchas) are in [OUTLINE.md](OUTLINE.md).
 
 - **Unofficial.** There's no public AI Mode API, and automated querying is
   against Google's Terms of Service. Use it lightly, for personal research.
-  Heavy use can trigger captchas or temporary blocks on your IP.
+  Heavy use can trigger captchas or temporary blocks on your IP, which can also
+  affect normal Google searching for everyone on your network. You're responsible
+  for how you use it. See the notice in [LICENSE](LICENSE).
 - **Answers are model output.** Check the cited sources before relying on them.
 - **Privacy.** Every question is sent to Google. Don't include secrets or personal data.
 - **Fragile by nature.** If Google changes the AI Mode page, extraction may break
   (exit 4 or empty answers).
+
+## License
+
+[MIT](LICENSE), plus an additional notice: gask is unofficial and not affiliated
+with Google, Google may block IPs that send automated queries, and you use it at
+your own risk.

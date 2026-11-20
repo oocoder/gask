@@ -52,7 +52,8 @@ There's no Google login and nothing to configure.
 | `gask stop` | Stop the background Chrome |
 
 Options: `--json`, `--timeout <seconds>` (default 90), `--no-resolve` (keep
-Google redirect links), `-v` (progress on stderr). Pass `-` as the question, or
+Google redirect links), `--stop` (shut Chrome down right after answering),
+`-v` (progress on stderr). Pass `-` as the question, or
 pipe it in, to read from stdin.
 
 ### JSON output
@@ -96,12 +97,16 @@ Errors print `{ "ok": false, "code": N, "error": "..." }`.
 | `GASK_HOME` | `~/.gask` (browser profile, last answer, state) |
 | `GASK_PORT` | `9335` (Chrome remote-debugging port) |
 | `GASK_MIN_GAP_SECONDS` | `8` (minimum time between questions) |
-| `GASK_IDLE_MINUTES` | `30` (background Chrome stops after this much idle time) |
+| `GASK_IDLE_MINUTES` | `1` (background Chrome stops after this much idle time) |
 
 ## How it works
 
 - Chrome runs headless with its own profile, separate from your normal browser.
-  It stays up between calls, so answers take a few seconds, and it stops on its own when idle.
+  Any call starts it if needed. It stops by itself after 1 idle minute
+  (it uses about 1 GB of RAM while running), and a cold start adds only a second or two.
+  Follow-ups need Chrome still up, so ask them within the idle window or raise
+  `GASK_IDLE_MINUTES`.
+- AI agents: see the lifecycle and recovery rules in [OUTLINE.md](OUTLINE.md#1-for-agents-lifecycle-and-recovery).
 - Headless Chrome identifies itself as `HeadlessChrome`, and Google refuses AI
   Mode for that. gask presents a normal Chrome user agent instead.
 - It knows an answer is finished when the page announces "AI Mode response is ready".

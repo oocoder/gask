@@ -13,7 +13,7 @@ const HOME = process.env.GASK_HOME || path.join(os.homedir(), '.gask');
 const PORT = Number(process.env.GASK_PORT || 9335);
 const CHROME = process.env.GASK_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const MIN_GAP_MS = Number(process.env.GASK_MIN_GAP_SECONDS || 8) * 1000;
-const IDLE_MS = Number(process.env.GASK_IDLE_MINUTES || 30) * 60_000;
+const IDLE_MS = Number(process.env.GASK_IDLE_MINUTES || 1) * 60_000;
 const AI_URL = 'https://www.google.com/search?udm=50&hl=en';
 const BOX = 'textarea[aria-label="Ask anything"]';
 const CDP = `http://127.0.0.1:${PORT}`;
@@ -81,6 +81,11 @@ async function startChrome({ headed = false } = {}) {
     `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`,
     '--no-first-run', '--no-default-browser-check', '--lang=en-US',
     '--window-size=1280,900', `--user-agent=${userAgent()}`,
+    // Trim memory: gask needs one tab, no sync/extensions/updates/translate.
+    '--disable-extensions', '--disable-sync', '--disable-default-apps',
+    '--disable-background-networking', '--disable-component-update',
+    '--no-pings', '--mute-audio', '--renderer-process-limit=2',
+    '--disable-features=Translate,MediaRouter,OptimizationHints,BackForwardCache,DialMediaRouteProvider,AutofillServerCommunication',
   ];
   if (!headed) args.unshift('--headless=new');
   const child = spawn(CHROME, args, { detached: true, stdio: 'ignore' });
@@ -89,23 +94,28 @@ async function startChrome({ headed = false } = {}) {
   for (let i = 0; i < 40; i++) { await sleep(250); if (await cdpUp()) break; }
   if (!(await cdpUp())) throw new GaskError(EXIT.CHROME, `Chrome did not open its debug port ${PORT}`);
   log(`started ${headed ? 'headed' : 'headless'} Chrome pid ${child.pid}`);
-  if (!headed) startReaper();
 }
 
-function startReaper() {
-  // Detached watcher: stops the headless Chrome after GASK_IDLE_MINUTES without a query.
+function ensureReaper() {
+  // Detached watcher that stops the headless Chrome after GASK_IDLE_MINUTES
+  // without a query. Called on every run, so a dead watcher gets replaced.
+  const s = state();
+  if (s.headed || (s.reaperPid && alive(s.reaperPid))) return;
   const r = spawn(process.execPath, [new URL(import.meta.url).pathname, '_reaper'], { detached: true, stdio: 'ignore' });
   r.unref();
+  patchState({ reaperPid: r.pid });
+  log(`idle watcher pid ${r.pid} (stops Chrome after ${IDLE_MS / 60000} idle min)`);
 }
 
 async function reaper() {
   for (;;) {
-    await sleep(60_000);
+    await sleep(Math.min(30_000, Math.max(5_000, IDLE_MS / 4)));
     const s = state();
-    if (!s.pid || !alive(s.pid)) return;
+    if (s.reaperPid !== process.pid) return; // superseded by a newer watcher
+    if (!s.pid || !alive(s.pid)) { patchState({ reaperPid: null }); return; }
     if (s.headed) return; // a human is using it; leave it alone
     const last = Math.max(s.lastQueryAt || 0, s.startedAt || 0);
-    if (Date.now() - last > IDLE_MS && !fs.existsSync(LOCK)) { stopChrome(); return; }
+    if (Date.now() - last > IDLE_MS && !fs.existsSync(LOCK)) { stopChrome(); patchState({ reaperPid: null }); return; }
   }
 }
 
@@ -119,6 +129,7 @@ function stopChrome() {
 
 async function connect() {
   await startChrome();
+  ensureReaper();
   const browser = await chromium.connectOverCDP(CDP);
   const ctx = browser.contexts()[0];
   return { browser, ctx };
@@ -327,6 +338,11 @@ const USAGE = `gask: ask Google AI Mode from the command line (headless Chrome)
   gask stop               stop the background Chrome
 
   options: --json  --timeout <seconds> (default 90)  --no-resolve  -v
+           --stop   shut Chrome down right after answering (one-off use)
+
+  Chrome stays up between calls and stops itself after GASK_IDLE_MINUTES
+  (default 1) without a question. A follow-up after that
+  starts a fresh conversation, so raise it for long research sessions.
   question "-" reads it from stdin
 
 exit codes: 0 ok, 1 error/usage, 2 timeout, 3 blocked (captcha), 4 AI Mode unavailable, 5 Chrome failed`;
@@ -336,6 +352,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--json') o.json = true;
+    else if (a === '--stop') o.stop = true;
     else if (a === '--no-resolve') o.resolve = false;
     else if (a === '-v' || a === '--verbose') VERBOSE = true;
     else if (a === '--timeout') o.timeoutMs = Number(argv[++i]) * 1000;
@@ -366,6 +383,7 @@ async function main() {
       const q = await readQuestion(o.rest);
       const r = await runQuery(q, { follow: cmd === 'follow', timeoutMs: o.timeoutMs, resolve: o.resolve });
       printResult(r, o.json);
+      if (o.stop) stopChrome();
       return r.ok ? EXIT.OK : EXIT.TIMEOUT;
     }
 
@@ -394,6 +412,7 @@ async function main() {
         lastQuery: s.lastQueryAt ? new Date(s.lastQueryAt).toISOString() : null,
         idleStopMinutes: IDLE_MS / 60000, minGapSeconds: MIN_GAP_MS / 1000, home: HOME,
         lockHeld: fs.existsSync(LOCK),
+        idleWatcher: s.reaperPid && alive(s.reaperPid) ? `running (pid ${s.reaperPid})` : 'not running',
       };
       if (v) {
         const { ctx } = await connect();

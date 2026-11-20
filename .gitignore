@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# runtime state (default lives in ~/.gask; ignore if GASK_HOME points inside the repo)
+.gask/
+profile/
+state.json
+last.json
+lock/
+
+# local env / secrets
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+*.log
+.vscode/
+.idea/

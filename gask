@@ -1,0 +1,4 @@
+#!/bin/bash
+# Wrapper so `gask` works from anywhere (including through a symlink).
+DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+exec node "$DIR/gask.mjs" "$@"

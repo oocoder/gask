@@ -1,0 +1,9 @@
+{
+  "name": "gask",
+  "private": true,
+  "type": "module",
+  "description": "CLI that asks Google AI Mode a question through a headless Chrome and prints the answer with sources",
+  "dependencies": {
+    "playwright-core": "1.56.1"
+  }
+}

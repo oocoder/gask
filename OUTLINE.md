@@ -1,0 +1,73 @@
+# gask
+
+A CLI that asks **Google AI Mode** (`google.com/search?udm=50`) a question
+through a private **headless Chrome** and prints the answer plus the real source
+URLs. It's built so any model or script can call it.
+
+Its answers are **leads, not facts**. Open the cited source before relying on
+anything that matters (dates, fees, legal rules).
+
+Use gask when you want a fast, sourced synthesis of the open web. To read
+one specific page, use a fetcher or extractor instead.
+
+Requirements: macOS with Google Chrome installed (set `GASK_CHROME` for another
+path or OS), Node 18+.
+
+---
+
+## 0. Setup and usage
+
+Install, commands, JSON shape, exit codes and env vars: see [README.md](README.md).
+This file holds the maintainer notes: how it works and what has bitten us.
+
+---
+
+## 1. How it works
+
+- **Chrome**: launches the installed Google Chrome with `--headless=new` on
+  debug port **9335**, profile `~/.gask/profile`. It's separate from any Chrome you
+  use.
+  It stays running between calls (each answer takes about 3 to 20s) and
+  a detached reaper stops it after **30 idle minutes**.
+- **User agent**: headless Chrome reports `HeadlessChrome`, and Google
+  replies "AI Mode is not currently available on your device". gask passes a
+  normal Chrome UA (major version read from `chrome --version`). Verified 2026-11-20.
+- **Done detection**: the page's `aria-live` region goes from "AI Mode is thinking
+  about your query" to "AI Mode response is ready". gask waits for that plus 2
+  stable ticks, and falls back to about 7s of no text change.
+- **Extraction**: anchors on stable English text, not obfuscated class names:
+  the `h3` "AI Mode reply for ...", the visible `textarea[aria-label="Ask anything"]`,
+  "AI can make mistakes". `--lang=en-US` and `hl=en` keep those strings in English.
+  Citation chips and source cards are hidden while reading the text.
+  Source cards are `a[data-link-behavior=cobrowse]`.
+  Inline links that carry real words are kept.
+- **Sources**: links are opaque `google.com/goto?url=...`. gask resolves each one
+  with a no-redirect GET and reads `Location`.
+- **Safety rails**: one query at a time (`~/.gask/lock`) and at least **8s between
+  queries**. Captcha/consent detection returns exit 3 instead of hanging.
+
+Env overrides: `GASK_HOME`, `GASK_PORT`, `GASK_CHROME`,
+`GASK_MIN_GAP_SECONDS`, `GASK_IDLE_MINUTES`.
+
+---
+
+## 2. Gotchas
+
+- **Plain HTTP doesn't work.** `curl` of the AI Mode URL returns an
+  "enable JavaScript" shell with no answer. A real browser engine is required.
+- **No public API.** Automated querying is against Google's terms. Keep usage to
+  a handful of questions at a time. Heavy use risks captchas or a temporary block
+  on your IP, which affects normal Google searching too.
+- **Fresh profiles get checked.** The first run on a new profile was redirected
+  through Google's abuse check and auto-exempted (`google_abuse=...EXEMPTION` in
+  the URL). Keep `~/.gask/profile`; don't delete it casually.
+- **Hidden textareas.** Every reply block has its own hidden textarea. Only the
+  *visible* "Ask anything" box marks the conversation boundary.
+- **Card text isn't newline-separated.** Site, title and snippet are split by the
+  card's `aria-label` (title), not by lines.
+- **Layout changes** will surface as exit 4 or empty answers. Re-probe the DOM
+  with a visible window (`gask show`) and update the markers in `extractLast`.
+- **Privacy**: every question goes to Google. Never put secrets, SSNs, client
+  data or anything private in a question.
+- **Answers are model output**: they can be wrong or stale, even when they cite a
+  source. Check the source itself before acting on dates, fees or rules.
